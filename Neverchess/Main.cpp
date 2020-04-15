@@ -2,46 +2,34 @@
 #include <Network.h>
 #include <iostream>
 #include <bitset>
+#include <Layer.h>
+#include <Functions.h>
 
 #include "BoardState.h"
 #include "MoveData.h"
-#include <Layer.h>
 
-#define INPUT_SIZE 448
 #define HIDDEN_SIZE 500
-#define OUTPUT_SIZE 2
+#define OUTPUT_SIZE 1
 #define H_LAYERS 3
-
-float sigmoid(float x)
-{
-	return 1.0f / (1 + exp(-x));
-}
-
-float dSigmoid(float x)
-{
-	return sigmoid(x) * (1 - sigmoid(x));
-}
-
-float relu(float x)
-{
-	if (x < 0.0f)
-	{
-		return 0;
-	}
-	return x;
-}
-
-float dRelu(float x)
-{
-	if (x < 0.0f)
-	{
-		return 0;
-	}
-	return 1;
-}
 
 int main()
 {
-	//Network ann;
-	//ann.Init(INPUT_SIZE, HIDDEN_SIZE, OUTPUT_SIZE, H_LAYERS, relu, sigmoid, dRelu, dSigmoid);
+	AnnUtilities::Network network;
+	network.Init(BoardState::ANN_INPUT_LENGTH, 500, 1, 3, AnnUtilities::sigmoid, AnnUtilities::sigmoid, AnnUtilities::dSigmoid, AnnUtilities::dSigmoid);
+	BoardState::BoardManager manager;
+	BoardState::BoardStateData board;
+	manager.initBoardStateDataPieces(board._pieces);
+	//board._turn = true;
+	//board._kingMoved[0] = true;
+	//board._kingMoved[1] = true;
+	//manager.placePiece(board._pieces, PieceCode::W_KING, 4, 0);
+	//manager.placePiece(board._pieces, PieceCode::B_KING, 0, 7);
+	//manager.placePiece(board._pieces, PieceCode::W_ROOK, 7, 0);
+	//manager.placePiece(board._pieces, PieceCode::W_QUEEN, 1, 5);
+
+	manager.process(board, network, 2, 10000);
+	//BoardState::AlphaBetaEvaluation eval = manager.alphaBeta(board, network, 2, 0, 1);
+
+	//std::cout << eval.blackWin << "\n" << eval.whiteWin << std::endl;
+	return 0;
 }

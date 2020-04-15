@@ -1,5 +1,5 @@
 #pragma once
-enum class PieceCode : unsigned char
+enum class PieceCode
 {
 	EMPTY = 0b0000000,
 	W_KING = 0b0000001,

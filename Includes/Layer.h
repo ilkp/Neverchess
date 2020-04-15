@@ -11,14 +11,14 @@ namespace AnnUtilities
 		float* _deltaBiases = nullptr;
 		float* _outputs = nullptr;
 		float* _error = nullptr;
-		float (*_activation)(float);
-		float (*_derivative)(float);
+		float (*_activationFunction)(float);
+		float (*_derivativeFunction)(float);
 
 	public:
 		int _layerSize;
 		Layer* _prevLayer = nullptr;
 		Layer* _nextLayer = nullptr;
-		Layer(Layer* previousLayer, int layerSize, float(*activation)(float), float(*derivative)(float));
+		Layer(Layer* previousLayer, int layerSize, float(*activationFunction)(float), float(*derivativeFunction)(float));
 		~Layer();
 
 		void propagationForward();
