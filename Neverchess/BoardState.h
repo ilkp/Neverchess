@@ -5,6 +5,7 @@
 #include <Layer.h>
 #include <stack>
 #include <unordered_map>
+#include <string>
 #include "PieceCode.h"
 #include "MoveData.h"
 
@@ -49,34 +50,6 @@ namespace BoardState
 		}
 	};
 
-	struct BoardHash
-	{
-		std::size_t operator()(BoardStateData& const boardStateData) const noexcept
-		{
-			std::size_t h = 0;
-			for (int i = 0; i < BOARD_LENGTH * BOARD_LENGTH; ++i)
-			{
-				if (i % 2 == 0)
-				{
-					h += std::hash<int>{}((int)boardStateData._pieces[i] >> 1);
-				}
-				else
-				{
-					h += std::hash<int>{}((int)boardStateData._pieces[i] << 1);
-				}
-			}
-			return h
-				^ std::hash<bool>()(boardStateData._turn)
-				^ std::hash<bool>()(boardStateData._kingMoved[0])
-				^ std::hash<bool>()(boardStateData._kingMoved[1])
-				^ std::hash<bool>()(boardStateData._kRookMoved[0])
-				^ std::hash<bool>()(boardStateData._kRookMoved[1])
-				^ std::hash<bool>()(boardStateData._qRookMoved[0])
-				^ std::hash<bool>()(boardStateData._qRookMoved[1])
-				^ std::hash<int>()(boardStateData._enPassant);
-		}
-	};
-
 	struct AlphaBetaEvaluation
 	{
 		BoardStateData boardStateData;
@@ -90,14 +63,17 @@ namespace BoardState
 	class BoardManager
 	{
 	private:
+		long int zobristPieceValues[BOARD_LENGTH * BOARD_LENGTH * 12] = { 0 };
 		std::stack<AlphaBetaEvaluation> alphaBetaHistory;
-		std::unordered_map<std::size_t, int> hashPositions;
+		std::unordered_map<long int, int> hashPositions;
 
 		void setANNInput						(BoardStateData& boardStateData, AnnUtilities::Layer* inputLayer);
 		void increasePositionMap				(BoardStateData& boardStateData, MoveData& move);
 		void findKing							(const PieceCode pieces[], bool turn, int* pos);
 		void playMove							(BoardStateData& boardStateData, const MoveData& move);
 		std::vector<BoardStateData> filterMoves	(const BoardStateData& boardStateData, std::vector<MoveData>& moves);
+		long int zobrishHash					(BoardStateData& const boardStateData);
+		bool zobristValueExists					(long int v);
 
 		void genRawMoves						(const BoardStateData& boardStateData, std::vector<MoveData>& moves);
 		void genRawPieceMoves					(const BoardStateData& boardStateData, std::vector<MoveData>& moves, int x, int y);
@@ -124,6 +100,11 @@ namespace BoardState
 		void printBoard							(BoardStateData& boardStateData);
 
 	public:
+		BoardManager()
+		{
+			calculateZobristValues();
+		}
+
 		void train								(AnnUtilities::Network& ann);
 		void process							(BoardStateData& boardStateData, AnnUtilities::Network& network, int evaluationDepth, int maxTurns);
 		void evaluate							(BoardStateData& boardStateData, AnnUtilities::Network& network, AlphaBetaEvaluation& eval, bool noMoves);
@@ -133,5 +114,7 @@ namespace BoardState
 		std::vector<MoveData> getMoves			(const BoardStateData& boardStateData);
 		void reset								();
 		void resetBoardStateData				(BoardStateData& boardStateDate);
+		void calculateZobristValues				();
+		void exportANN							(AnnUtilities::Network& network, std::string fileName);
 	};
 }

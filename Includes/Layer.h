@@ -5,9 +5,7 @@ namespace AnnUtilities
 	class Layer
 	{
 	private:
-		float* _weights = nullptr;
 		float* _deltaWeights = nullptr;
-		float* _biases = nullptr;
 		float* _deltaBiases = nullptr;
 		float* _outputs = nullptr;
 		float* _error = nullptr;
@@ -18,6 +16,8 @@ namespace AnnUtilities
 		int _layerSize;
 		Layer* _prevLayer = nullptr;
 		Layer* _nextLayer = nullptr;
+		float* _biases = nullptr;
+		float* _weights = nullptr;
 		Layer(Layer* previousLayer, int layerSize, float(*activationFunction)(float), float(*derivativeFunction)(float));
 		~Layer();
 

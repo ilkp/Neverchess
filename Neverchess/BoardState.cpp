@@ -7,24 +7,31 @@
 #include <algorithm>
 #include <iostream>
 #include <random>
+#include <fstream>
 #include <time.h>
+#include <chrono>
+#include <string>
 
 
 namespace BoardState
 {
 	void BoardManager::process(BoardStateData& boardStateData, AnnUtilities::Network& network, int evaluationDepth, int maxTurns)
 	{
-		srand(time(NULL));
+		std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 		int turn = 0;
 		AlphaBetaEvaluation eval;
-		std::vector<MoveData> randomMoves;
-		genRawMoves(boardStateData, randomMoves);
-		filterMoves(boardStateData, randomMoves);
-		playMove(boardStateData, randomMoves[rand() % randomMoves.size()]);
+		//std::vector<MoveData> randomMoves;
+		//genRawMoves(boardStateData, randomMoves);
+		//filterMoves(boardStateData, randomMoves);
+		//playMove(boardStateData, randomMoves[rand() % randomMoves.size()]);
+		//randomMoves.clear();
+		//genRawMoves(boardStateData, randomMoves);
+		//filterMoves(boardStateData, randomMoves);
+		//playMove(boardStateData, randomMoves[rand() % randomMoves.size()]);
 
 		while (turn < maxTurns)
 		{
-			eval = alphaBeta(boardStateData, network, evaluationDepth, 0, 1);
+			eval = alphaBeta(boardStateData, network, evaluationDepth, -1000.0f, 1000.0f);
 			alphaBetaHistory.push(eval);
 			if (eval.whiteWin || eval.blackWin)
 			{
@@ -32,7 +39,10 @@ namespace BoardState
 			}
 			increasePositionMap(boardStateData, eval.move);
 			playMove(boardStateData, eval.move);
-			if (hashPositions.at(BoardHash{}(boardStateData)) > 2 || turn > maxTurns)
+			//std::cout << turn << " " << (turn%2 == 0 ? "white" : "black") << "\t(" << eval.move.xStart << ", " << eval.move.yStart << ") -> (" << eval.move.xEnd << ", " << eval.move.yEnd << ")\t"
+			//	<< eval.evaluatedValue << std::endl;
+			//printBoard(boardStateData);
+			if (hashPositions.at(zobrishHash(boardStateData)) > 2 || turn > maxTurns)
 			{
 				std::cout << "Draw by repetition" << std::endl;
 				alphaBetaHistory.top().blackWin = false;
@@ -42,7 +52,9 @@ namespace BoardState
 			}
 			++turn;
 		}
-		std::cout << turn << ", draw = " << alphaBetaHistory.top().draw << ", white win = " << alphaBetaHistory.top().whiteWin << ", black win = " << alphaBetaHistory.top().blackWin << std::endl;
+		std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+		std::cout << "turn: " << turn << ", elapsed time: " << std::chrono::duration_cast<std::chrono::seconds>(end - begin).count()
+			<< ", draw = " << alphaBetaHistory.top().draw << ", white win = " << alphaBetaHistory.top().whiteWin << ", black win = " << alphaBetaHistory.top().blackWin << std::endl;
 		printBoard(boardStateData);
 	}
 
@@ -66,14 +78,21 @@ namespace BoardState
 		BoardStateData temp;
 		float value;
 		int i = 0;
+		evaluation.move = moves[0];
+		float abValue;
 		if (!boardStateData._turn) // white always minimizing player
 		{
-			value = 1.0f;
+			value = 1000.0f;
+			evaluation.evaluatedValue = value;
 			for (; i < moves.size(); ++i)
 			{
-				value = std::min(value, alphaBeta(newStates[i], network, depth - 1, alpha, beta).evaluatedValue);
-				evaluation.evaluatedValue = value;
-				evaluation.move = moves[i];
+				abValue = alphaBeta(newStates[i], network, depth - 1, alpha, beta).evaluatedValue;
+				if (abValue < value)
+				{
+					value = abValue;
+					evaluation.evaluatedValue = value;
+					evaluation.move = moves[i];
+				}
 				beta = std::min(beta, value);
 				if (alpha >= beta)
 				{
@@ -83,12 +102,17 @@ namespace BoardState
 		}
 		else // black always maximizing player
 		{
-			value = 0.0f;
+			value = -1000.0f;
+			evaluation.evaluatedValue = value;
 			for (; i < moves.size(); ++i)
 			{
-				value = std::max(value, alphaBeta(newStates[i], network, depth - 1, alpha, beta).evaluatedValue);
-				evaluation.evaluatedValue = value;
-				evaluation.move = moves[i];
+				abValue = alphaBeta(newStates[i], network, depth - 1, alpha, beta).evaluatedValue;
+				if (abValue > value)
+				{
+					value = abValue;
+					evaluation.evaluatedValue = value;
+					evaluation.move = moves[i];
+				}
 				alpha = std::max(alpha, value);
 				if (alpha >= beta)
 				{
@@ -96,7 +120,6 @@ namespace BoardState
 				}
 			}
 		}
-
 		return evaluation;
 	}
 
@@ -171,6 +194,76 @@ namespace BoardState
 		boardStateDate._enPassant = -1;
 	}
 
+	void BoardManager::calculateZobristValues()
+	{
+		std::random_device rd;
+		std::mt19937_64 e2(rd());
+		std::uniform_int_distribution<long long int> dist(std::llround(std::pow(2, 61)), std::llround(std::pow(2, 62)));
+		long long int v;
+		for (int i = 0; i < BOARD_LENGTH * BOARD_LENGTH * 12; ++i)
+		{
+			do
+			{
+				v = dist(e2);
+			} while (zobristValueExists(v));
+			zobristPieceValues[i] = v;
+		}
+	}
+
+	void BoardManager::exportANN(AnnUtilities::Network& network, std::string fileName)
+	{
+		int hiddenLayers = 0;
+		AnnUtilities::Layer* l = network._inputLayer->_nextLayer;
+		while (l != network._outputLayer)
+		{
+			++hiddenLayers;
+			l = l->_nextLayer;
+		}
+		std::ofstream file;
+		file.open(fileName, std::ios_base::app);
+		file << network._inputLayer->_layerSize << "\n";
+		file << network._inputLayer->_nextLayer->_layerSize << "\n";
+		file << network._outputLayer->_layerSize << "\n";
+		file << hiddenLayers << "\n";
+		l = network._inputLayer->_nextLayer;
+		for (int i = 0; i < l->_layerSize; ++i)
+		{
+			for (int j = 0; j < network._inputLayer->_layerSize; ++j)
+			{
+				file << l->_weights[i * network._inputLayer->_layerSize + j] << "\n";
+			}
+		}
+		l = l->_nextLayer;
+		while (l != network._outputLayer)
+		{
+			for (int i = 0; i < network._inputLayer->_layerSize; ++i)
+			{
+				for (int j = 0; j < network._inputLayer->_layerSize; ++j)
+				{
+					file << l->_weights[i * network._inputLayer->_layerSize + j] << "\n";
+				}
+			}
+			l = l->_nextLayer;
+		}
+		for (int i = 0; i < network._outputLayer->_layerSize; ++i)
+		{
+			for (int j = 0; j < network._outputLayer->_prevLayer->_layerSize; ++j)
+			{
+				file << network._outputLayer->_weights[i * network._outputLayer->_prevLayer->_layerSize + j] << "\n";
+			}
+		}
+		l = network._inputLayer->_nextLayer;
+		while (l != nullptr)
+		{
+			for (int i = 0; i < l->_layerSize; ++i)
+			{
+				file << l->_biases[i] << "\n";
+			}
+			l = l->_nextLayer;
+		}
+		file.close();
+	}
+
 	void BoardManager::placePiece(PieceCode pieces[], PieceCode pieceCode, int x, int y)
 	{
 		pieces[y * BOARD_LENGTH + x] = pieceCode;
@@ -183,12 +276,12 @@ namespace BoardState
 			if (boardStateData._turn)
 			{
 				evaluation.whiteWin = true;
-				evaluation.evaluatedValue = 0;
+				evaluation.evaluatedValue = 0.0f;
 			}
 			else
 			{
 				evaluation.blackWin = true;
-				evaluation.evaluatedValue = 1;
+				evaluation.evaluatedValue = 1.0f;
 			}
 		}
 		else
@@ -202,19 +295,24 @@ namespace BoardState
 	void BoardManager::train(AnnUtilities::Network& ann)
 	{
 		int size = alphaBetaHistory.size();
+		float labelWhite;
+		float labelBlack;
 		float label;
 		AlphaBetaEvaluation eval = alphaBetaHistory.top();
 		if (eval.whiteWin)
 		{
-			label = 0.0f;
+			labelWhite = 0.0f;
+			labelBlack = 0.0f;
 		}
 		else if (eval.blackWin)
 		{
-			label = 1.0f;
+			labelWhite = 1.0f;
+			labelBlack = 1.0f;
 		}
 		else
 		{
-			label = 0.5f;
+			labelWhite = 1.0f;
+			labelBlack = 0.0f;
 		}
 
 		for (int i = 0; i < size; ++i)
@@ -222,6 +320,14 @@ namespace BoardState
 			eval = alphaBetaHistory.top();
 			setANNInput(eval.boardStateData, ann._inputLayer);
 			ann.propagateForward();
+			if (eval.boardStateData._turn)
+			{
+				label = labelBlack - (labelBlack - 0.5f) * ((i + 1.0f) / (size + 1.0f));
+			}
+			else
+			{
+				label = labelWhite - (labelWhite - 0.5f) * ((i + 1.0f) / (size + 1.0f));
+			}
 			ann.propagateBackward(&label);
 			alphaBetaHistory.pop();
 		}
@@ -292,12 +398,12 @@ namespace BoardState
 			playMove(temp, *it);
 			if (temp._pieces[kingPos[0] + kingPos[1] * BOARD_LENGTH] == kingCode)
 			{
-				kingThreatened = squareThreatened(temp._pieces, !boardStateData._turn, kingPos[0], kingPos[1]);
+				kingThreatened = squareThreatened(temp._pieces, temp._turn, kingPos[0], kingPos[1]);
 			}
 			else
 			{
 				findKing(temp._pieces, boardStateData._turn, kingPosMoved);
-				kingThreatened = squareThreatened(temp._pieces, !boardStateData._turn, kingPosMoved[0], kingPosMoved[1]);
+				kingThreatened = squareThreatened(temp._pieces, temp._turn, kingPosMoved[0], kingPosMoved[1]);
 			}
 			if (kingThreatened)
 			{
@@ -310,6 +416,21 @@ namespace BoardState
 			}
 		}
 		return newStates;
+	}
+
+	long int BoardManager::zobrishHash(BoardStateData& const boardStateData)
+	{
+		long int h = 0;
+		int piece;
+		for (int i = 0; i < BOARD_LENGTH * BOARD_LENGTH; ++i)
+		{
+			if (boardStateData._pieces[i] != PieceCode::EMPTY)
+			{
+				piece = (int)boardStateData._pieces[i];
+				h = h ^ zobristPieceValues[i + piece];
+			}
+		}
+		return h;
 	}
 
 	void BoardManager::findKing(const PieceCode pieces[], bool turn, int* pos)
@@ -491,20 +612,33 @@ namespace BoardState
 			}
 			std::cout << "\n";
 		}
+		std::cout << "\n";
+	}
+
+	bool BoardManager::zobristValueExists(long int v)
+	{
+		for (int i = 0; i < BOARD_LENGTH * BOARD_LENGTH * 12; ++i)
+		{
+			if (zobristPieceValues[i] == v)
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 
 	void BoardManager::increasePositionMap(BoardStateData& boardStateData, MoveData& move)
 	{
 		BoardStateData temp = boardStateData;
 		playMove(temp, move);
-		std::size_t h = BoardHash{}(temp);
+		long long int h = zobrishHash(temp);
 		if (hashPositions.find(h) == hashPositions.end())
 		{
 			hashPositions.insert({h, 1});
 		}
 		else
 		{
-			++hashPositions.at(BoardHash{}(temp));
+			++hashPositions.at(h);
 		}
 	}
 
@@ -666,6 +800,7 @@ namespace BoardState
 		int y = pieceY + (turn ? -1 : 1);
 		if (pieces[y * BOARD_LENGTH + pieceX] == PieceCode::EMPTY)
 		{
+			// regular move
 			MoveData moveBse;
 			moveBse.xStart = pieceX;
 			moveBse.yStart = pieceY;
@@ -673,6 +808,7 @@ namespace BoardState
 			moveBse.yEnd = y;
 			if ((turn && y == 0) || (!turn && y == BOARD_LENGTH - 1))
 			{
+				// upgrade if at the end of the board
 				moveBse.upgrade = turn ? PieceCode::B_QUEEN : PieceCode::W_QUEEN;
 				MoveData upgradeToKnight;
 				upgradeToKnight.xStart = pieceX;
@@ -685,6 +821,7 @@ namespace BoardState
 			moves.push_back(std::move(moveBse));
 			if (!turn && pieceY == 1 && pieces[(pieceY + 2) * BOARD_LENGTH + pieceX] == PieceCode::EMPTY)
 			{
+				// double move white
 				MoveData moveDouble;
 				moveDouble.xStart = pieceX;
 				moveDouble.yStart = pieceY;
@@ -695,6 +832,7 @@ namespace BoardState
 			}
 			else if (turn && pieceY == BOARD_LENGTH - 2 && pieces[(pieceY - 2) * BOARD_LENGTH + pieceX] == PieceCode::EMPTY)
 			{
+				// double move black
 				MoveData moveDouble;
 				moveDouble.xStart = pieceX;
 				moveDouble.yStart = pieceY;
@@ -704,22 +842,48 @@ namespace BoardState
 				moves.push_back(std::move(moveDouble));
 			}
 		}
-		if (pieces[y * BOARD_LENGTH + pieceX - 1] == PieceCode::EMPTY && (int)pieces[y * BOARD_LENGTH + pieceX - 1] >> (BOARD_LENGTH - 1) != turn)
+		if (pieceX > 0 && pieces[y * BOARD_LENGTH + pieceX - 1] != PieceCode::EMPTY && (int)pieces[y * BOARD_LENGTH + pieceX - 1] >> (PIECE_CODE_LENGTH - 1) != turn)
 		{
+			// take 
 			MoveData move;
 			move.xStart = pieceX;
 			move.yStart = pieceY;
 			move.xEnd = pieceX - 1;
 			move.yEnd = y;
+			if ((turn && y == 0) || (!turn && y == BOARD_LENGTH - 1))
+			{
+				// upgrade if at the end of the board
+				move.upgrade = turn ? PieceCode::B_QUEEN : PieceCode::W_QUEEN;
+				MoveData upgradeToKnight;
+				upgradeToKnight.xStart = pieceX;
+				upgradeToKnight.yStart = pieceY;
+				upgradeToKnight.xEnd = pieceX - 1;
+				upgradeToKnight.yEnd = y;
+				upgradeToKnight.upgrade = turn ? PieceCode::B_KNIGHT : PieceCode::W_KNIGHT;
+				moves.push_back(std::move(upgradeToKnight));
+			}
 			moves.push_back(std::move(move));
 		}
-		if (pieces[y * BOARD_LENGTH + pieceX + 1] == PieceCode::EMPTY && (int)pieces[y * BOARD_LENGTH + pieceX + 1] >> (BOARD_LENGTH - 1) != turn)
+		if (pieceX < BOARD_LENGTH - 1 && pieces[y * BOARD_LENGTH + pieceX + 1] != PieceCode::EMPTY && (int)pieces[y * BOARD_LENGTH + pieceX + 1] >> (PIECE_CODE_LENGTH - 1) != turn)
 		{
+			// take
 			MoveData move;
 			move.xStart = pieceX;
 			move.yStart = pieceY;
 			move.xEnd = pieceX + 1;
 			move.yEnd = y;
+			if ((turn && y == 0) || (!turn && y == BOARD_LENGTH - 1))
+			{
+				// upgrade if at the end of the board
+				move.upgrade = turn ? PieceCode::B_QUEEN : PieceCode::W_QUEEN;
+				MoveData upgradeToKnight;
+				upgradeToKnight.xStart = pieceX;
+				upgradeToKnight.yStart = pieceY;
+				upgradeToKnight.xEnd = pieceX + 1;
+				upgradeToKnight.yEnd = y;
+				upgradeToKnight.upgrade = turn ? PieceCode::B_KNIGHT : PieceCode::W_KNIGHT;
+				moves.push_back(std::move(upgradeToKnight));
+			}
 			moves.push_back(std::move(move));
 		}
 		if (enPassant != -1)
