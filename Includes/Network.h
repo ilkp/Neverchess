@@ -10,7 +10,6 @@ namespace AnnUtilities
 	class Network
 	{
 	private:
-		void propagateBackward(const float* const labels);
 
 	public:
 		Layer* _inputLayer = nullptr;
@@ -18,9 +17,11 @@ namespace AnnUtilities
 		Network();
 		~Network();
 		void propagateForward();
+		void propagateBackward(const float* const labels);
 		void Init(const int inputSize, const int hiddenSize, const int outputSize, const int hiddenLayers,
 			float(*activationFuncHiddenL)(float), float(*activationFuncOutputL)(float), float(*derivativeFuncHiddenL)(float), float(*derivativeFuncOutputL)(float));
 		void Epoch(const InputData* const inputData, const int inputSize, const float learningRate);
+		void update(const int batchSize, const float learningRate);
 		float* Test(const float* const inputData);
 		void Clean();
 	};

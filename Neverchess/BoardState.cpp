@@ -6,15 +6,22 @@
 #include <math.h>
 #include <algorithm>
 #include <iostream>
+#include <random>
+#include <time.h>
 
-int turn = 0;
 
 namespace BoardState
 {
 	void BoardManager::process(BoardStateData& boardStateData, AnnUtilities::Network& network, int evaluationDepth, int maxTurns)
 	{
-		//int turn = 0;
+		srand(time(NULL));
+		int turn = 0;
 		AlphaBetaEvaluation eval;
+		std::vector<MoveData> randomMoves;
+		genRawMoves(boardStateData, randomMoves);
+		filterMoves(boardStateData, randomMoves);
+		playMove(boardStateData, randomMoves[rand() % randomMoves.size()]);
+
 		while (turn < maxTurns)
 		{
 			eval = alphaBeta(boardStateData, network, evaluationDepth, 0, 1);
@@ -23,10 +30,19 @@ namespace BoardState
 			{
 				break;
 			}
+			increasePositionMap(boardStateData, eval.move);
 			playMove(boardStateData, eval.move);
-			++turn;;
+			if (hashPositions.at(BoardHash{}(boardStateData)) > 2 || turn > maxTurns)
+			{
+				std::cout << "Draw by repetition" << std::endl;
+				alphaBetaHistory.top().blackWin = false;
+				alphaBetaHistory.top().whiteWin = false;
+				alphaBetaHistory.top().draw = true;
+				break;
+			}
+			++turn;
 		}
-		std::cout << turn << ", white win = " << eval.whiteWin << ", black win = " << eval.blackWin << std::endl;
+		std::cout << turn << ", draw = " << alphaBetaHistory.top().draw << ", white win = " << alphaBetaHistory.top().whiteWin << ", black win = " << alphaBetaHistory.top().blackWin << std::endl;
 		printBoard(boardStateData);
 	}
 
@@ -35,10 +51,6 @@ namespace BoardState
 		AlphaBetaEvaluation evaluation;
 		evaluation.boardStateData = boardStateData;
 		std::vector<MoveData> moves;
-		if (turn == 19)
-		{
-			int a = 5;
-		}
 		genRawMoves(boardStateData, moves);
 		std::vector<BoardStateData> newStates = filterMoves(boardStateData, moves);
 		if (moves.size() == 0)
@@ -115,6 +127,50 @@ namespace BoardState
 		pieces[7 * BOARD_LENGTH + 7] = PieceCode::B_ROOK;
 	}
 
+	void BoardManager::resetBoardStateData(BoardStateData& boardStateDate)
+	{
+		for (int y = 2; y < BOARD_LENGTH - 2; ++y)
+		{
+			for (int x = 0; x < BOARD_LENGTH; ++x)
+			{
+				boardStateDate._pieces[y * BOARD_LENGTH + x] = PieceCode::EMPTY;
+			}
+		}
+
+		for (int x = 0; x < BOARD_LENGTH; ++x)
+		{
+			boardStateDate._pieces[BOARD_LENGTH + x] = PieceCode::W_PAWN;
+			boardStateDate._pieces[6 * BOARD_LENGTH + x] = PieceCode::B_PAWN;
+		}
+
+		boardStateDate._pieces[0] = PieceCode::W_ROOK;
+		boardStateDate._pieces[1] = PieceCode::W_KNIGHT;
+		boardStateDate._pieces[2] = PieceCode::W_BISHOP;
+		boardStateDate._pieces[3] = PieceCode::W_QUEEN;
+		boardStateDate._pieces[4] = PieceCode::W_KING;
+		boardStateDate._pieces[5] = PieceCode::W_BISHOP;
+		boardStateDate._pieces[6] = PieceCode::W_KNIGHT;
+		boardStateDate._pieces[7] = PieceCode::W_ROOK;
+
+		boardStateDate._pieces[7 * BOARD_LENGTH + 0] = PieceCode::B_ROOK;
+		boardStateDate._pieces[7 * BOARD_LENGTH + 1] = PieceCode::B_KNIGHT;
+		boardStateDate._pieces[7 * BOARD_LENGTH + 2] = PieceCode::B_BISHOP;
+		boardStateDate._pieces[7 * BOARD_LENGTH + 3] = PieceCode::B_QUEEN;
+		boardStateDate._pieces[7 * BOARD_LENGTH + 4] = PieceCode::B_KING;
+		boardStateDate._pieces[7 * BOARD_LENGTH + 5] = PieceCode::B_BISHOP;
+		boardStateDate._pieces[7 * BOARD_LENGTH + 6] = PieceCode::B_KNIGHT;
+		boardStateDate._pieces[7 * BOARD_LENGTH + 7] = PieceCode::B_ROOK;
+
+		boardStateDate._turn = 0;
+		boardStateDate._kingMoved[0] = false;
+		boardStateDate._kingMoved[1] = false;
+		boardStateDate._kRookMoved[0] = false;
+		boardStateDate._kRookMoved[1] = false;
+		boardStateDate._qRookMoved[0] = false;
+		boardStateDate._qRookMoved[1] = false;
+		boardStateDate._enPassant = -1;
+	}
+
 	void BoardManager::placePiece(PieceCode pieces[], PieceCode pieceCode, int x, int y)
 	{
 		pieces[y * BOARD_LENGTH + x] = pieceCode;
@@ -141,6 +197,35 @@ namespace BoardState
 			network.propagateForward();
 			evaluation.evaluatedValue = network._outputLayer->getOutput()[0];
 		}
+	}
+
+	void BoardManager::train(AnnUtilities::Network& ann)
+	{
+		int size = alphaBetaHistory.size();
+		float label;
+		AlphaBetaEvaluation eval = alphaBetaHistory.top();
+		if (eval.whiteWin)
+		{
+			label = 0.0f;
+		}
+		else if (eval.blackWin)
+		{
+			label = 1.0f;
+		}
+		else
+		{
+			label = 0.5f;
+		}
+
+		for (int i = 0; i < size; ++i)
+		{
+			eval = alphaBetaHistory.top();
+			setANNInput(eval.boardStateData, ann._inputLayer);
+			ann.propagateForward();
+			ann.propagateBackward(&label);
+			alphaBetaHistory.pop();
+		}
+		ann.update(size, 0.2f);
 	}
 
 	void BoardManager::setANNInput(BoardStateData& boardStateData, AnnUtilities::Layer* inputLayer)
@@ -184,7 +269,7 @@ namespace BoardState
 			{
 				for (int i = 0; i < PIECE_CODE_LENGTH; ++i)
 				{
-					input[13 + (y * BOARD_LENGTH * PIECE_CODE_LENGTH) + (x * PIECE_CODE_LENGTH) + i]
+					input[13 + (y * BOARD_LENGTH + x) * PIECE_CODE_LENGTH + i]
 						= float(((int)boardStateData._pieces[y * BOARD_LENGTH + x] >> i) & 1);
 				}
 			}
@@ -318,6 +403,15 @@ namespace BoardState
 		return moves;
 	}
 
+	void BoardManager::reset()
+	{
+		for (int i = 0; i < alphaBetaHistory.size(); ++i)
+		{
+			alphaBetaHistory.pop();
+		}
+		hashPositions.clear();
+	}
+
 	void BoardManager::genRawPieceMoves(const BoardStateData& boardStateData, std::vector<MoveData>& moves, int x, int y)
 	{
 		switch (boardStateData._pieces[y * BOARD_LENGTH + x])
@@ -396,6 +490,21 @@ namespace BoardState
 				std::cout << "]\t";
 			}
 			std::cout << "\n";
+		}
+	}
+
+	void BoardManager::increasePositionMap(BoardStateData& boardStateData, MoveData& move)
+	{
+		BoardStateData temp = boardStateData;
+		playMove(temp, move);
+		std::size_t h = BoardHash{}(temp);
+		if (hashPositions.find(h) == hashPositions.end())
+		{
+			hashPositions.insert({h, 1});
+		}
+		else
+		{
+			++hashPositions.at(BoardHash{}(temp));
 		}
 	}
 
