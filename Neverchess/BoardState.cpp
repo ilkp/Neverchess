@@ -631,7 +631,7 @@ namespace BoardState
 	{
 		BoardStateData temp = boardStateData;
 		playMove(temp, move);
-		long long int h = zobrishHash(temp);
+		long int h = zobrishHash(temp);
 		if (hashPositions.find(h) == hashPositions.end())
 		{
 			hashPositions.insert({h, 1});

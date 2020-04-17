@@ -100,11 +100,6 @@ namespace BoardState
 		void printBoard							(BoardStateData& boardStateData);
 
 	public:
-		BoardManager()
-		{
-			calculateZobristValues();
-		}
-
 		void train								(AnnUtilities::Network& ann);
 		void process							(BoardStateData& boardStateData, AnnUtilities::Network& network, int evaluationDepth, int maxTurns);
 		void evaluate							(BoardStateData& boardStateData, AnnUtilities::Network& network, AlphaBetaEvaluation& eval, bool noMoves);
