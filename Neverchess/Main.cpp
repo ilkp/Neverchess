@@ -24,7 +24,7 @@ int main()
 	std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 	try
 	{
-		for (int i = 0; i < 1000; ++i)
+		for (int i = 0; i < 100; ++i)
 		{
 			std::cout << i << "th game" << std::endl;
 			manager.resetBoardStateData(board);
@@ -36,7 +36,7 @@ int main()
 	catch (std::exception e)
 	{
 		std::ofstream crashDump;
-		crashDump.open("CASH_DUMP.TXT");
+		crashDump.open("CRASH_DUMP.TXT");
 		crashDump << e.what();
 	}
 	std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();

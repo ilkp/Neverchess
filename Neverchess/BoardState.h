@@ -60,20 +60,36 @@ namespace BoardState
 		bool draw = false;
 	};
 
+	struct BoardEvaluation
+	{
+		MoveData move;
+		float evaluatedValue;
+		bool whiteWin = false;
+		bool blackWin = false;
+		bool draw = false;
+	};
+
 	class BoardManager
 	{
 	private:
-		long int zobristPieceValues[BOARD_LENGTH * BOARD_LENGTH * 12] = { 0 };
+		unsigned long int zobristPieceValues[BOARD_LENGTH * BOARD_LENGTH * 12] = { 0 };
+		unsigned long int zobristTurnValues[2] = { 0 };
+		unsigned long int zobristKingMovedValues[2] = { 0 };
+		unsigned long int zobristQRookMovedValues[2] = { 0 };
+		unsigned long int zobristKRookMovedValues[2] = { 0 };
+		unsigned long int zobristEnPassantValues[9] = { 0 };
 		std::stack<AlphaBetaEvaluation> alphaBetaHistory;
-		std::unordered_map<long int, int> hashPositions;
+		std::unordered_map<unsigned long int, int> hashPositions;
+		std::unordered_map<unsigned long int, BoardEvaluation> boardEvaluations;
+		int availableThreads = 0;
 
 		void setANNInput						(BoardStateData& boardStateData, AnnUtilities::Layer* inputLayer);
 		void increasePositionMap				(BoardStateData& boardStateData, MoveData& move);
 		void findKing							(const PieceCode pieces[], bool turn, int* pos);
 		void playMove							(BoardStateData& boardStateData, const MoveData& move);
 		std::vector<BoardStateData> filterMoves	(const BoardStateData& boardStateData, std::vector<MoveData>& moves);
-		long int zobrishHash					(BoardStateData& const boardStateData);
-		bool zobristValueExists					(long int v);
+		unsigned long int zobristHash			(const BoardStateData& boardStateData);
+		bool zobristValueExists					(unsigned long int v);
 
 		void genRawMoves						(const BoardStateData& boardStateData, std::vector<MoveData>& moves);
 		void genRawPieceMoves					(const BoardStateData& boardStateData, std::vector<MoveData>& moves, int x, int y);
@@ -106,10 +122,10 @@ namespace BoardState
 		void initBoardStateDataPieces			(PieceCode pieces[]);
 		void placePiece							(PieceCode pieces[], PieceCode pieceCode, int x, int y);
 		AlphaBetaEvaluation alphaBeta			(BoardStateData& boardStateData, AnnUtilities::Network& network, int depth, float alpha, float beta);
-		std::vector<MoveData> getMoves			(const BoardStateData& boardStateData);
 		void reset								();
 		void resetBoardStateData				(BoardStateData& boardStateDate);
 		void calculateZobristValues				();
 		void exportANN							(AnnUtilities::Network& network, std::string fileName);
+		AnnUtilities::Network importANN			(std::string fileName);
 	};
 }

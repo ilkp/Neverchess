@@ -11,6 +11,7 @@
 #include <time.h>
 #include <chrono>
 #include <string>
+#include <thread>
 
 
 namespace BoardState
@@ -20,14 +21,6 @@ namespace BoardState
 		std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 		int turn = 0;
 		AlphaBetaEvaluation eval;
-		//std::vector<MoveData> randomMoves;
-		//genRawMoves(boardStateData, randomMoves);
-		//filterMoves(boardStateData, randomMoves);
-		//playMove(boardStateData, randomMoves[rand() % randomMoves.size()]);
-		//randomMoves.clear();
-		//genRawMoves(boardStateData, randomMoves);
-		//filterMoves(boardStateData, randomMoves);
-		//playMove(boardStateData, randomMoves[rand() % randomMoves.size()]);
 
 		while (turn < maxTurns)
 		{
@@ -39,10 +32,9 @@ namespace BoardState
 			}
 			increasePositionMap(boardStateData, eval.move);
 			playMove(boardStateData, eval.move);
-			//std::cout << turn << " " << (turn%2 == 0 ? "white" : "black") << "\t(" << eval.move.xStart << ", " << eval.move.yStart << ") -> (" << eval.move.xEnd << ", " << eval.move.yEnd << ")\t"
-			//	<< eval.evaluatedValue << std::endl;
+			//std::cout << "(" << eval.move.xStart << ", " << eval.move.yStart << ") -> (" << eval.move.xEnd << ", " << eval.move.yEnd << ")" << std::endl;
 			//printBoard(boardStateData);
-			if (hashPositions.at(zobrishHash(boardStateData)) > 2 || turn > maxTurns)
+			if (hashPositions.at(zobristHash(boardStateData)) > 2)
 			{
 				std::cout << "Draw by repetition" << std::endl;
 				alphaBetaHistory.top().blackWin = false;
@@ -62,9 +54,20 @@ namespace BoardState
 	{
 		AlphaBetaEvaluation evaluation;
 		evaluation.boardStateData = boardStateData;
+		auto transpVal = boardEvaluations.find(zobristHash(boardStateData));
+		if (transpVal != boardEvaluations.end())
+		{
+			evaluation.move = transpVal->second.move;
+			evaluation.evaluatedValue = transpVal->second.evaluatedValue;
+			evaluation.whiteWin = transpVal->second.whiteWin;
+			evaluation.blackWin = transpVal->second.blackWin;
+			evaluation.draw = transpVal->second.draw;
+			return evaluation;
+		}
 		std::vector<MoveData> moves;
 		genRawMoves(boardStateData, moves);
 		std::vector<BoardStateData> newStates = filterMoves(boardStateData, moves);
+
 		if (moves.size() == 0)
 		{
 			evaluate(boardStateData, network, evaluation, true);
@@ -75,18 +78,40 @@ namespace BoardState
 			evaluate(boardStateData, network, evaluation, false);
 			return evaluation;
 		}
-		BoardStateData temp;
-		float value;
-		int i = 0;
-		evaluation.move = moves[0];
+
+		AlphaBetaEvaluation newEval;
+		BoardEvaluation newBoardEval;
 		float abValue;
+		float value = boardStateData._turn ? -1000.0f : 1000.0f;
+		evaluation.move = moves[0];
+		BoardStateData temp;
+		unsigned long int zHash;
+
 		if (!boardStateData._turn) // white always minimizing player
 		{
 			value = 1000.0f;
 			evaluation.evaluatedValue = value;
-			for (; i < moves.size(); ++i)
+			for (int i = 0; i < moves.size(); ++i)
 			{
-				abValue = alphaBeta(newStates[i], network, depth - 1, alpha, beta).evaluatedValue;
+				zHash = zobristHash(newStates[i]);
+				if (boardEvaluations.find(zHash) == boardEvaluations.end())
+				{
+					newEval = alphaBeta(newStates[i], network, depth - 1, alpha, beta);
+					if (newEval.move.xStart != -1)
+					{
+						newBoardEval.move = newEval.move;
+						newBoardEval.whiteWin = newEval.whiteWin;
+						newBoardEval.blackWin = newEval.blackWin;
+						newBoardEval.draw = newEval.draw;
+						newBoardEval.evaluatedValue = newEval.evaluatedValue;
+						boardEvaluations[zHash] = newBoardEval;
+					}
+					abValue = newEval.evaluatedValue;
+				}
+				else
+				{
+					abValue = boardEvaluations[zHash].evaluatedValue;
+				}
 				if (abValue < value)
 				{
 					value = abValue;
@@ -104,9 +129,27 @@ namespace BoardState
 		{
 			value = -1000.0f;
 			evaluation.evaluatedValue = value;
-			for (; i < moves.size(); ++i)
+			for (int i = 0; i < moves.size(); ++i)
 			{
-				abValue = alphaBeta(newStates[i], network, depth - 1, alpha, beta).evaluatedValue;
+				zHash = zobristHash(newStates[i]);
+				if (boardEvaluations.find(zHash) == boardEvaluations.end())
+				{
+					newEval = alphaBeta(newStates[i], network, depth - 1, alpha, beta);
+					if (newEval.move.xStart != -1)
+					{
+						newBoardEval.move = newEval.move;
+						newBoardEval.whiteWin = newEval.whiteWin;
+						newBoardEval.blackWin = newEval.blackWin;
+						newBoardEval.draw = newEval.draw;
+						newBoardEval.evaluatedValue = newEval.evaluatedValue;
+						boardEvaluations[zHash] = newBoardEval;
+					}
+					abValue = newEval.evaluatedValue;
+				}
+				else
+				{
+					abValue = boardEvaluations[zHash].evaluatedValue;
+				}
 				if (abValue > value)
 				{
 					value = abValue;
@@ -197,9 +240,9 @@ namespace BoardState
 	void BoardManager::calculateZobristValues()
 	{
 		std::random_device rd;
-		std::mt19937_64 e2(rd());
-		std::uniform_int_distribution<long long int> dist(std::llround(std::pow(2, 61)), std::llround(std::pow(2, 62)));
-		long long int v;
+		std::mt19937 e2(rd());
+		std::uniform_int_distribution<unsigned long int> dist(0, ULONG_MAX);
+		unsigned long int v;
 		for (int i = 0; i < BOARD_LENGTH * BOARD_LENGTH * 12; ++i)
 		{
 			do
@@ -207,6 +250,46 @@ namespace BoardState
 				v = dist(e2);
 			} while (zobristValueExists(v));
 			zobristPieceValues[i] = v;
+		}
+		for (int i = 0; i < BOARD_LENGTH + 1; ++i)
+		{
+			do
+			{
+				v = dist(e2);
+			} while (zobristValueExists(v));
+			zobristEnPassantValues[i] = v;
+		}
+		for (int i = 0; i < 2; ++i)
+		{
+			do
+			{
+				v = dist(e2);
+			} while (zobristValueExists(v));
+			zobristTurnValues[i] = v;
+		}
+		for (int i = 0; i < 2; ++i)
+		{
+			do
+			{
+				v = dist(e2);
+			} while (zobristValueExists(v));
+			zobristKingMovedValues[i] = v;
+		}
+		for (int i = 0; i < 2; ++i)
+		{
+			do
+			{
+				v = dist(e2);
+			} while (zobristValueExists(v));
+			zobristQRookMovedValues[i] = v;
+		}
+		for (int i = 0; i < 2; ++i)
+		{
+			do
+			{
+				v = dist(e2);
+			} while (zobristValueExists(v));
+			zobristKRookMovedValues[i] = v;
 		}
 	}
 
@@ -225,33 +308,20 @@ namespace BoardState
 		file << network._inputLayer->_nextLayer->_layerSize << "\n";
 		file << network._outputLayer->_layerSize << "\n";
 		file << hiddenLayers << "\n";
+		// WRITE WEIGHTS
 		l = network._inputLayer->_nextLayer;
-		for (int i = 0; i < l->_layerSize; ++i)
+		while (l != nullptr)
 		{
-			for (int j = 0; j < network._inputLayer->_layerSize; ++j)
+			for (int i = 0; i < l->_layerSize; ++i)
 			{
-				file << l->_weights[i * network._inputLayer->_layerSize + j] << "\n";
-			}
-		}
-		l = l->_nextLayer;
-		while (l != network._outputLayer)
-		{
-			for (int i = 0; i < network._inputLayer->_layerSize; ++i)
-			{
-				for (int j = 0; j < network._inputLayer->_layerSize; ++j)
+				for (int j = 0; j < l->_prevLayer->_layerSize; ++j)
 				{
-					file << l->_weights[i * network._inputLayer->_layerSize + j] << "\n";
+					file << l->_weights[i * l->_prevLayer->_layerSize + j] << "\n";
 				}
 			}
 			l = l->_nextLayer;
 		}
-		for (int i = 0; i < network._outputLayer->_layerSize; ++i)
-		{
-			for (int j = 0; j < network._outputLayer->_prevLayer->_layerSize; ++j)
-			{
-				file << network._outputLayer->_weights[i * network._outputLayer->_prevLayer->_layerSize + j] << "\n";
-			}
-		}
+		// WRITE BIASES
 		l = network._inputLayer->_nextLayer;
 		while (l != nullptr)
 		{
@@ -262,6 +332,73 @@ namespace BoardState
 			l = l->_nextLayer;
 		}
 		file.close();
+	}
+
+	AnnUtilities::Network BoardManager::importANN(std::string fileName)
+	{
+		//AnnUtilities::Network ann;
+		//std::ifstream file;
+		//file.open(fileName);
+		//std::string line;
+		//std::getline(file, line);
+		//int inputSize = std::stoi(line);
+		//std::getline(file, line);
+		//int hiddenSize = std::stoi(line);
+		//std::getline(file, line);
+		//int outputSize = std::stoi(line);
+		//std::getline(file, line);
+		//int nHiddenLayers = std::stoi(line);
+
+		//_inputLayer = new ANNLayer(inputSize);
+		//_inputLayer._previousLayer = null;
+		//ANNLayer[] hiddenLayers = new ANNLayer[nHiddenLayers];
+		//hiddenLayers[0] = new ANNLayer(hiddenSize);
+		//hiddenLayers[0]._previousLayer = _inputLayer;
+		//for (int i = 1; i < nHiddenLayers; ++i)
+		//{
+		//	hiddenLayers[i] = new ANNLayer(hiddenSize, hiddenLayers[i - 1]);
+		//	hiddenLayers[i - 1]._nextLayer = hiddenLayers[i];
+		//}
+		//_outputLayer = new ANNLayer(outputSize, hiddenLayers[hiddenLayers.Length - 1]);
+		//_outputLayer._nextLayer = null;
+		//hiddenLayers[hiddenLayers.Length - 1] = _outputLayer;
+
+		//ANNLayer l = _inputLayer._nextLayer;
+		//for (int i = 0; i < hiddenSize; ++i)
+		//{
+		//	for (int j = 0; j < inputSize; ++j)
+		//	{
+		//		l._weights[i * inputSize + j] = float.Parse(lines[++line]);
+		//	}
+		//}
+		//l = l._nextLayer;
+		//while (l != _outputLayer)
+		//{
+		//	for (int i = 0; i < hiddenSize; ++i)
+		//	{
+		//		for (int j = 0; j < hiddenSize; ++j)
+		//		{
+		//			l._weights[i * hiddenSize + j] = float.Parse(lines[++line]);
+		//		}
+		//	}
+		//	l = l._nextLayer;
+		//}
+		//for (int i = 0; i < outputSize; ++i)
+		//{
+		//	for (int j = 0; j < hiddenSize; ++j)
+		//	{
+		//		_outputLayer._weights[i * hiddenSize + j] = float.Parse(lines[++line]);
+		//	}
+		//}
+		//l = _inputLayer._nextLayer;
+		//while (l != null)
+		//{
+		//	for (int i = 0; i < l._layerSize; ++i)
+		//	{
+		//		l._biases[i] = float.Parse(lines[++line]);
+		//	}
+		//	l = l._nextLayer;
+		//}
 	}
 
 	void BoardManager::placePiece(PieceCode pieces[], PieceCode pieceCode, int x, int y)
@@ -365,7 +502,7 @@ namespace BoardState
 			int epMask = 1 << boardStateData._enPassant;
 			for (int i = 0; i < 8; ++i)
 			{
-				input[5 + 1] = epMask >> i == 1;
+				input[5 + i] = epMask >> i == 1;
 			}
 		}
 
@@ -418,18 +555,71 @@ namespace BoardState
 		return newStates;
 	}
 
-	long int BoardManager::zobrishHash(BoardStateData& const boardStateData)
+	unsigned long int BoardManager::zobristHash(const BoardStateData& boardStateData)
 	{
-		long int h = 0;
-		int piece;
+		unsigned long int h = 0;
+		PieceCode piece;
+		int intPiece = 0;
+		h = h ^ zobristTurnValues[(int)boardStateData._turn];
 		for (int i = 0; i < BOARD_LENGTH * BOARD_LENGTH; ++i)
 		{
 			if (boardStateData._pieces[i] != PieceCode::EMPTY)
 			{
-				piece = (int)boardStateData._pieces[i];
-				h = h ^ zobristPieceValues[i + piece];
+				piece = boardStateData._pieces[i];
+				switch (piece)
+				{
+				case PieceCode::W_KING:
+					intPiece = 0;
+					break;
+				case PieceCode::W_QUEEN:
+					intPiece = 1;
+					break;
+				case PieceCode::W_PAWN:
+					intPiece = 2;
+					break;
+				case PieceCode::W_KNIGHT:
+					intPiece = 3;
+					break;
+				case PieceCode::W_BISHOP:
+					intPiece = 4;
+					break;
+				case PieceCode::W_ROOK:
+					intPiece = 5;
+					break;
+				case PieceCode::B_KING:
+					intPiece = 6;
+					break;
+				case PieceCode::B_QUEEN:
+					intPiece = 7;
+					break;
+				case PieceCode::B_PAWN:
+					intPiece = 8;
+					break;
+				case PieceCode::B_KNIGHT:
+					intPiece = 9;
+					break;
+				case PieceCode::B_BISHOP:
+					intPiece = 10;
+					break;
+				case PieceCode::B_ROOK:
+					intPiece = 11;
+					break;
+				}
+				h = h ^ zobristPieceValues[(i * 12) + intPiece];
 			}
 		}
+		for (int i = 0; i < BOARD_LENGTH + 1; ++i)
+		{
+			int enPassant = boardStateData._enPassant + 1;
+			h = h ^ zobristEnPassantValues[enPassant];
+		}
+		h = h ^ zobristKingMovedValues[0];
+		h = h ^ zobristKingMovedValues[1];
+		h = h ^ zobristQRookMovedValues[0];
+		h = h ^ zobristQRookMovedValues[1];
+		h = h ^ zobristQRookMovedValues[0];
+		h = h ^ zobristQRookMovedValues[1];
+
 		return h;
 	}
 
@@ -516,14 +706,6 @@ namespace BoardState
 		}
 	}
 
-	std::vector<MoveData> BoardManager::getMoves(const BoardStateData& boardStateData)
-	{
-		std::vector<MoveData> moves;
-		genRawMoves(boardStateData, moves);
-		filterMoves(boardStateData, moves);
-		return moves;
-	}
-
 	void BoardManager::reset()
 	{
 		for (int i = 0; i < alphaBetaHistory.size(); ++i)
@@ -531,6 +713,7 @@ namespace BoardState
 			alphaBetaHistory.pop();
 		}
 		hashPositions.clear();
+		boardEvaluations.clear();
 	}
 
 	void BoardManager::genRawPieceMoves(const BoardStateData& boardStateData, std::vector<MoveData>& moves, int x, int y)
@@ -615,7 +798,7 @@ namespace BoardState
 		std::cout << "\n";
 	}
 
-	bool BoardManager::zobristValueExists(long int v)
+	bool BoardManager::zobristValueExists(unsigned long int v)
 	{
 		for (int i = 0; i < BOARD_LENGTH * BOARD_LENGTH * 12; ++i)
 		{
@@ -624,6 +807,29 @@ namespace BoardState
 				return true;
 			}
 		}
+		for (int i = 0; i < BOARD_LENGTH + 1; ++i)
+		{
+			if (zobristEnPassantValues[i] == v)
+			{
+				return true;
+			}
+		}
+		if (zobristTurnValues[0] == v || zobristTurnValues[1] == v)
+		{
+			return true;
+		}
+		if (zobristKingMovedValues[0] == v || zobristKingMovedValues[1] == v)
+		{
+			return true;
+		}
+		if (zobristQRookMovedValues[0] == v || zobristQRookMovedValues[1] == v)
+		{
+			return true;
+		}
+		if (zobristKRookMovedValues[0] == v || zobristKRookMovedValues[1] == v)
+		{
+			return true;
+		}
 		return false;
 	}
 
@@ -631,7 +837,7 @@ namespace BoardState
 	{
 		BoardStateData temp = boardStateData;
 		playMove(temp, move);
-		long int h = zobrishHash(temp);
+		unsigned long int h = zobristHash(temp);
 		if (hashPositions.find(h) == hashPositions.end())
 		{
 			hashPositions.insert({h, 1});
@@ -958,11 +1164,12 @@ namespace BoardState
 		int row = (boardStateData._turn ? 0 : BOARD_LENGTH - 1) * BOARD_LENGTH;
 		return !boardStateData._kingMoved[boardStateData._turn]
 			&& !boardStateData._qRookMoved[boardStateData._turn]
+			&& boardStateData._pieces[row + 1] == PieceCode::EMPTY
 			&& boardStateData._pieces[row + 2] == PieceCode::EMPTY
 			&& boardStateData._pieces[row + 3] == PieceCode::EMPTY
-			&& !squareThreatened(boardStateData._pieces, boardStateData._turn, 4, row)
 			&& !squareThreatened(boardStateData._pieces, boardStateData._turn, 2, row)
-			&& !squareThreatened(boardStateData._pieces, boardStateData._turn, 3, row);
+			&& !squareThreatened(boardStateData._pieces, boardStateData._turn, 3, row)
+			&& !squareThreatened(boardStateData._pieces, boardStateData._turn, 4, row);
 	}
 
 	bool BoardManager::squareThreatened(const PieceCode pieces[], bool turn, int x, int y)
