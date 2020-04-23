@@ -13,8 +13,9 @@
 #define OUTPUT_SIZE 1
 #define H_LAYERS 3
 
-int main()
+int main(int argc, char* argv[])
 {
+	srand(time(NULL));
 	AnnUtilities::Network network;
 	network.Init(BoardState::ANN_INPUT_LENGTH, 900, 1, 3, AnnUtilities::sigmoid, AnnUtilities::dSigmoid, AnnUtilities::sigmoid, AnnUtilities::dSigmoid);
 	BoardState::BoardManager manager;
@@ -24,7 +25,7 @@ int main()
 	std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 	try
 	{
-		for (int i = 0; i < 100; ++i)
+		for (int i = 0; i < 500; ++i)
 		{
 			std::cout << i << "th game" << std::endl;
 			manager.resetBoardStateData(board);

@@ -3,7 +3,7 @@
 #include <vector>
 #include <Network.h>
 #include <Layer.h>
-#include <stack>
+#include <queue>
 #include <unordered_map>
 #include <string>
 #include "PieceCode.h"
@@ -52,21 +52,8 @@ namespace BoardState
 
 	struct AlphaBetaEvaluation
 	{
-		BoardStateData boardStateData;
 		MoveData move;
 		float evaluatedValue;
-		bool whiteWin = false;
-		bool blackWin = false;
-		bool draw = false;
-	};
-
-	struct BoardEvaluation
-	{
-		MoveData move;
-		float evaluatedValue;
-		bool whiteWin = false;
-		bool blackWin = false;
-		bool draw = false;
 	};
 
 	class BoardManager
@@ -78,20 +65,23 @@ namespace BoardState
 		unsigned long int zobristQRookMovedValues[2] = { 0 };
 		unsigned long int zobristKRookMovedValues[2] = { 0 };
 		unsigned long int zobristEnPassantValues[9] = { 0 };
-		std::stack<AlphaBetaEvaluation> alphaBetaHistory;
+		std::queue<AlphaBetaEvaluation> alphaBetaHistory;
 		std::unordered_map<unsigned long int, int> hashPositions;
-		std::unordered_map<unsigned long int, BoardEvaluation> boardEvaluations;
+		std::unordered_map<unsigned long int, AlphaBetaEvaluation> boardEvaluations;
 		int availableThreads = 0;
+		bool whiteWin = false;
+		bool blackWin = false;
 
-		void setANNInput						(BoardStateData& boardStateData, AnnUtilities::Layer* inputLayer);
-		void increasePositionMap				(BoardStateData& boardStateData, MoveData& move);
+		void setANNInput						(const BoardStateData& boardStateData, AnnUtilities::Layer* inputLayer);
+		void increasePositionMap				(const BoardStateData& boardStateData);
 		void findKing							(const PieceCode pieces[], bool turn, int* pos);
 		void playMove							(BoardStateData& boardStateData, const MoveData& move);
 		std::vector<BoardStateData> filterMoves	(const BoardStateData& boardStateData, std::vector<MoveData>& moves);
 		unsigned long int zobristHash			(const BoardStateData& boardStateData);
 		bool zobristValueExists					(unsigned long int v);
+		void checkWinner						(const BoardStateData& boardStateData);
 
-		void genRawMoves						(const BoardStateData& boardStateData, std::vector<MoveData>& moves);
+		std::vector<MoveData> genRawMoves		(const BoardStateData& boardStateData);
 		void genRawPieceMoves					(const BoardStateData& boardStateData, std::vector<MoveData>& moves, int x, int y);
 		void genRawMovesKing					(std::vector<MoveData>& moves, const BoardStateData& boardStateData, int pieceX, int pieceY);
 		void genRawMovesQueen					(std::vector<MoveData>& moves, const PieceCode pieces[], bool turn, int pieceX, int pieceY);
@@ -114,11 +104,19 @@ namespace BoardState
 		bool pawnCanThreatenSquare				(int turn, int pieceX, int pieceY, int targetX, int targetY);
 
 		void printBoard							(BoardStateData& boardStateData);
+		bool moveIsLegal						(const BoardStateData& boardStateData, const MoveData move);
+		bool moveIsLegalKing					(const MoveData& move, const PieceCode pieces[], bool turn, const bool kingMoved[], const bool kRookMoved[], const bool qRookMoved[]);
+		bool moveIsLegalQueen					(const MoveData& move, const PieceCode pieces[], bool turn);
+		bool moveIsLegalRook					(const MoveData& move, const PieceCode pieces[], bool turn);
+		bool moveIsLegalBishop					(const MoveData& move, const PieceCode pieces[], bool turn);
+		bool moveIsLegalKnight					(const MoveData& move, const PieceCode pieces[], bool turn);
+		bool moveIsLegalPawn					(const MoveData& move, const PieceCode pieces[], bool turn, int enPassant);
+		bool squaresAreEmpty					(const PieceCode pieces[], int xStart, int yStart, int xEnd, int yEnd);
 
 	public:
 		void train								(AnnUtilities::Network& ann);
 		void process							(BoardStateData& boardStateData, AnnUtilities::Network& network, int evaluationDepth, int maxTurns);
-		void evaluate							(BoardStateData& boardStateData, AnnUtilities::Network& network, AlphaBetaEvaluation& eval, bool noMoves);
+		void evaluate							(const BoardStateData& boardStateData, AnnUtilities::Network& network, AlphaBetaEvaluation& eval, bool noMoves);
 		void initBoardStateDataPieces			(PieceCode pieces[]);
 		void placePiece							(PieceCode pieces[], PieceCode pieceCode, int x, int y);
 		AlphaBetaEvaluation alphaBeta			(BoardStateData& boardStateData, AnnUtilities::Network& network, int depth, float alpha, float beta);
@@ -126,6 +124,6 @@ namespace BoardState
 		void resetBoardStateData				(BoardStateData& boardStateDate);
 		void calculateZobristValues				();
 		void exportANN							(AnnUtilities::Network& network, std::string fileName);
-		AnnUtilities::Network importANN			(std::string fileName);
+		//AnnUtilities::Network importANN			(std::string fileName);
 	};
 }
