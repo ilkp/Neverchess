@@ -1,7 +1,7 @@
 #pragma once
 
 #include <vector>
-#include <Network.h>
+#include <ANNetwork.h>
 #include <Layer.h>
 #include <queue>
 #include <unordered_map>
@@ -133,16 +133,16 @@ namespace BoardState
 		bool squaresAreEmpty					(const PieceCode pieces[], int xStart, int yStart, int xEnd, int yEnd);
 
 	public:
-		void train								(AnnUtilities::Network& ann);
-		void process							(BoardStateData& boardStateData, AnnUtilities::Network& network, int evaluationDepth, int maxTurns);
-		void evaluate							(const BoardStateData& boardStateData, AnnUtilities::Network& network, AlphaBetaEvaluation& eval, bool noMoves);
+		void train								(AnnUtilities::ANNetwork& ann);
+		void process							(BoardStateData& boardStateData, AnnUtilities::ANNetwork& network, int evaluationDepth, int maxTurns);
+		void evaluate							(const BoardStateData& boardStateData, AnnUtilities::ANNetwork& network, AlphaBetaEvaluation& eval, bool noMoves);
 		void initBoardStateDataPieces			(PieceCode pieces[]);
 		void placePiece							(PieceCode pieces[], PieceCode pieceCode, int x, int y);
-		AlphaBetaEvaluation alphaBeta			(BoardStateData& boardStateData, AnnUtilities::Network& network, int depth, float alpha, float beta);
+		AlphaBetaEvaluation alphaBeta			(BoardStateData& boardStateData, AnnUtilities::ANNetwork& network, int depth, float alpha, float beta);
 		void reset								();
 		void resetBoardStateData				(BoardStateData& boardStateDate);
 		void calculateZobristValues				();
-		void exportANN							(AnnUtilities::Network& network, std::string fileName);
+		void exportANN							(AnnUtilities::ANNetwork& network, std::string fileName);
 		//AnnUtilities::Network importANN			(std::string fileName);
 	};
 }

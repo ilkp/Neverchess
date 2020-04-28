@@ -1,7 +1,7 @@
 #include "BoardState.h"
 #include "PieceCode.h"
 #include "MoveData.h"
-#include "Network.h"
+#include "ANNetwork.h"
 #include "Layer.h"
 #include <math.h>
 #include <algorithm>
@@ -18,7 +18,7 @@
 
 namespace BoardState
 {
-	void BoardManager::process(BoardStateData& boardStateData, AnnUtilities::Network& network, int evaluationDepth, int maxTurns)
+	void BoardManager::process(BoardStateData& boardStateData, AnnUtilities::ANNetwork& network, int evaluationDepth, int maxTurns)
 	{
 		std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 		int turn = 0;
@@ -51,7 +51,7 @@ namespace BoardState
 		printBoard(boardStateData);
 	}
 
-	AlphaBetaEvaluation BoardManager::alphaBeta(BoardStateData& boardStateData, AnnUtilities::Network& network, int depth, float alpha, float beta)
+	AlphaBetaEvaluation BoardManager::alphaBeta(BoardStateData& boardStateData, AnnUtilities::ANNetwork& network, int depth, float alpha, float beta)
 	{
 		bool savePosition = false;
 		unsigned long int zHash = zobristHash(boardStateData);
@@ -244,7 +244,7 @@ namespace BoardState
 		}
 	}
 
-	void BoardManager::exportANN(AnnUtilities::Network& network, std::string fileName)
+	void BoardManager::exportANN(AnnUtilities::ANNetwork& network, std::string fileName)
 	{
 		int hiddenLayers = 0;
 		AnnUtilities::Layer* l = network._inputLayer->_nextLayer;
@@ -357,7 +357,7 @@ namespace BoardState
 		pieces[y * BOARD_LENGTH + x] = pieceCode;
 	}
 
-	void BoardManager::evaluate(const BoardStateData& boardStateData, AnnUtilities::Network& network, AlphaBetaEvaluation& evaluation, bool noMoves)
+	void BoardManager::evaluate(const BoardStateData& boardStateData, AnnUtilities::ANNetwork& network, AlphaBetaEvaluation& evaluation, bool noMoves)
 	{
 		if (noMoves)
 		{
@@ -380,7 +380,7 @@ namespace BoardState
 		}
 	}
 
-	void BoardManager::train(AnnUtilities::Network& ann)
+	void BoardManager::train(AnnUtilities::ANNetwork& ann)
 	{
 		float label;
 		float slope;

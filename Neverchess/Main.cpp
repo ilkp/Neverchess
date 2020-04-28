@@ -1,4 +1,4 @@
-#include <Network.h>
+#include <ANNetwork.h>
 #include <iostream>
 #include <Layer.h>
 #include <Functions.h>
@@ -14,10 +14,22 @@
 int main()
 {
 	//srand(time(NULL));
-	AnnUtilities::Network network;
+	AnnUtilities::ANNetwork ann;
 	BoardState::BoardManager manager;
 	BoardState::BoardStateData board;
-	network.Init(BoardState::ANN_INPUT_LENGTH, 900, 1, 3, AnnUtilities::ACTFUNC::TANH, AnnUtilities::ACTFUNC::SIGMOID);
+
+	AnnUtilities::ANNSettings annSettings;
+	annSettings._hiddenActicationFunction = AnnUtilities::ACTFUNC::TANH;
+	annSettings._outputActicationFunction = AnnUtilities::ACTFUNC::SIGMOID;
+	annSettings._inputSize = BoardState::ANN_INPUT_LENGTH;
+	annSettings._hiddenSize = 900;
+	annSettings._outputSize = 1;
+	annSettings._numberOfHiddenLayers = 3;
+	annSettings._learningRate = 0.1f;
+	annSettings._momentum = 0.0f;
+	ann._settings = annSettings;
+
+	ann.Init();
 	manager.calculateZobristValues();
 
 	std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
@@ -28,41 +40,41 @@ int main()
 		{
 			std::cout << i << "th game" << std::endl;
 			manager.resetBoardStateData(board);
-			manager.process(board, network, 2, 1000);
-			manager.train(network);
+			manager.process(board, ann, 2, 1000);
+			manager.train(ann);
 			manager.reset();
 		}
-		manager.exportANN(network, "ann100.ann");
+		manager.exportANN(ann, "ann100.ann");
 
 		for (; i < 500; ++i)
 		{
 			std::cout << i << "th game" << std::endl;
 			manager.resetBoardStateData(board);
-			manager.process(board, network, 2, 1000);
-			manager.train(network);
+			manager.process(board, ann, 2, 1000);
+			manager.train(ann);
 			manager.reset();
 		}
-		manager.exportANN(network, "ann500.ann");
+		manager.exportANN(ann, "ann500.ann");
 
 		for (; i < 2500; ++i)
 		{
 			std::cout << i << "th game" << std::endl;
 			manager.resetBoardStateData(board);
-			manager.process(board, network, 2, 1000);
-			manager.train(network);
+			manager.process(board, ann, 2, 1000);
+			manager.train(ann);
 			manager.reset();
 		}
-		manager.exportANN(network, "ann2500.ann");
+		manager.exportANN(ann, "ann2500.ann");
 
 		for (; i < 12500; ++i)
 		{
 			std::cout << i << "th game" << std::endl;
 			manager.resetBoardStateData(board);
-			manager.process(board, network, 2, 1000);
-			manager.train(network);
+			manager.process(board, ann, 2, 1000);
+			manager.train(ann);
 			manager.reset();
 		}
-		manager.exportANN(network, "ann10000.ann");
+		manager.exportANN(ann, "ann10000.ann");
 	}
 	catch (std::exception e)
 	{
