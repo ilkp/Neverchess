@@ -30,6 +30,25 @@ namespace BoardState
 		bool _qRookMoved[2] = { false, false };
 		int _enPassant = -1;
 
+		void copy(const BoardStateData& rhs)
+		{
+			for (int y = 0; y < BOARD_LENGTH; ++y)
+			{
+				for (int x = 0; x < BOARD_LENGTH; ++x)
+				{
+					_pieces[y * BOARD_LENGTH + x] = rhs._pieces[y * BOARD_LENGTH + x];
+				}
+			}
+			_turn = rhs._turn;
+			_enPassant = rhs._enPassant;
+			_kingMoved[0] = rhs._kingMoved[0];
+			_kingMoved[1] = rhs._kingMoved[1];
+			_kRookMoved[0] = rhs._kRookMoved[0];
+			_kRookMoved[1] = rhs._kRookMoved[1];
+			_qRookMoved[0] = rhs._qRookMoved[0];
+			_qRookMoved[1] = rhs._qRookMoved[1];
+		}
+
 		bool operator==(const BoardStateData& other)
 		{
 			for (int y = 0; y < BOARD_LENGTH; ++y)
@@ -73,13 +92,14 @@ namespace BoardState
 		bool blackWin = false;
 
 		void setANNInput						(const BoardStateData& boardStateData, AnnUtilities::Layer* inputLayer);
-		void increasePositionMap				(const BoardStateData& boardStateData);
+		int positionAppeared					(const BoardStateData& boardStateData);
 		void findKing							(const PieceCode pieces[], bool turn, int* pos);
 		void playMove							(BoardStateData& boardStateData, const MoveData& move);
 		std::vector<BoardStateData> filterMoves	(const BoardStateData& boardStateData, std::vector<MoveData>& moves);
 		unsigned long int zobristHash			(const BoardStateData& boardStateData);
 		bool zobristValueExists					(unsigned long int v);
 		void checkWinner						(const BoardStateData& boardStateData);
+		void printBoard							(const BoardStateData& boardStateData) const;
 
 		std::vector<MoveData> genRawMoves		(const BoardStateData& boardStateData);
 		void genRawPieceMoves					(const BoardStateData& boardStateData, std::vector<MoveData>& moves, int x, int y);
@@ -103,7 +123,6 @@ namespace BoardState
 		bool rookCanThreatenSquare				(const PieceCode pieces[], int pieceX, int pieceY, int targetX, int targetY);
 		bool pawnCanThreatenSquare				(int turn, int pieceX, int pieceY, int targetX, int targetY);
 
-		void printBoard							(BoardStateData& boardStateData);
 		bool moveIsLegal						(const BoardStateData& boardStateData, const MoveData move);
 		bool moveIsLegalKing					(const MoveData& move, const PieceCode pieces[], bool turn, const bool kingMoved[], const bool kRookMoved[], const bool qRookMoved[]);
 		bool moveIsLegalQueen					(const MoveData& move, const PieceCode pieces[], bool turn);

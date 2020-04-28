@@ -1,32 +1,28 @@
-#include <math.h>
+#pragma once
 
 namespace AnnUtilities
 {
-	float sigmoid(float x)
+	enum class ACTFUNC
 	{
-		return 1.0f / (1 + exp(-x));
-	}
+		SIGMOID,
+		RELU,
+		LEAKY_RELU,
+		TANH,
+	};
 
-	float dSigmoid(float x)
-	{
-		return sigmoid(x) * (1 - sigmoid(x));
-	}
+	float sigmoid(float x);
 
-	float reLu(float x)
-	{
-		if (x < 0.0f)
-		{
-			return 0;
-		}
-		return x;
-	}
+	float dSigmoid(float x);
 
-	float dReLu(float x)
-	{
-		if (x < 0.0f)
-		{
-			return 0;
-		}
-		return 1;
-	}
+	float relu(float x);
+
+	float dRelu(float x);
+
+	float leakyRelu(float x);
+
+	float dLeakyRelu(float x);
+
+	float hypTanh(float x);
+
+	float dTanh(float x);
 }
